@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import QRCodeScanner from "../components/QRCodeScanner";
 import Modal from "./components/Modal";
@@ -12,52 +12,64 @@ function AttendanceScanner() {
     const [scannedUser, setScannedUser] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [scanning, setScanning] = useState(false);
+    const [userList, setUserList] = useState([]);
 
+    // Fetch all users once on mount
     useEffect(() => {
         if (!officeId) {
             setMessage("❌ No office detected in URL.");
         }
+
+        const fetchUsers = async () => {
+            try {
+                const users = await getUsers();
+                setUserList(users);
+            } catch (err) {
+                console.error("❌ Failed to fetch users:", err);
+            }
+        };
+        fetchUsers();
     }, [officeId]);
 
-    const handleUserScan = async (data) => {
-        if (!data || isProcessing) return;
-        setIsProcessing(true);
+    // Scan handler optimized
+    const handleUserScan = useCallback(
+        async (data) => {
+            if (!data || isProcessing) return;
+            setIsProcessing(true);
 
-        try {
-            // Parse QR code JSON
-            let scanned;
             try {
-                scanned = JSON.parse(data);
-            } catch {
-                setMessage("❌ Invalid QR code format.");
-                return;
+                let scanned;
+                try {
+                    scanned = JSON.parse(data); // Parse QR JSON
+                } catch {
+                    setMessage("❌ Invalid QR code format.");
+                    return;
+                }
+
+                const { userId, officeId: qrOfficeId } = scanned;
+                const user = userList.find((u) => u.id === userId);
+
+                if (!user) {
+                    setMessage("❌ User not found.");
+                    return;
+                }
+
+                const officeToRecord = qrOfficeId || officeId;
+                await recordAttendance({ user_id: user.id, office_id: officeToRecord });
+
+                setScannedUser(user);
+                setMessage(`✅ Attendance recorded for ${user.name}`);
+                setShowModal(true);
+            } catch (err) {
+                console.error("❌ Error verifying or recording attendance:", err);
+                setMessage("❌ Failed to verify user or record attendance.");
+            } finally {
+                // Throttle next scan to prevent lag
+                setTimeout(() => setIsProcessing(false), 1500);
             }
-
-            const { userId, officeId: qrOfficeId } = scanned;
-
-            const userList = await getUsers();
-            const user = userList.find(u => u.id === userId);
-
-            if (!user) {
-                setMessage("❌ User not found.");
-                return;
-            }
-
-            // Use QR code officeId if provided, otherwise fallback to route param
-            const officeToRecord = qrOfficeId || officeId;
-
-            await recordAttendance({ user_id: user.id, office_id: officeToRecord });
-
-            setScannedUser(user);
-            setMessage(`✅ Attendance recorded for ${user.name}`);
-            setShowModal(true);
-        } catch (err) {
-            console.error("❌ Error verifying or recording attendance:", err);
-            setMessage("❌ Failed to verify user or record attendance.");
-        } finally {
-            setTimeout(() => setIsProcessing(false), 2000);
-        }
-    };
+        },
+        [userList, officeId, isProcessing]
+    );
 
     return (
         <div className="min-h-screen bg-white">
@@ -74,8 +86,18 @@ function AttendanceScanner() {
                 {!officeId ? (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                         <div className="flex items-center">
-                            <svg className="w-6 h-6 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg
+                                className="w-6 h-6 text-red-600 mr-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
                             </svg>
                             <p className="text-red-800 font-medium">{message}</p>
                         </div>
@@ -93,9 +115,7 @@ function AttendanceScanner() {
                                 </div>
                                 <button
                                     onClick={() => setScanning(!scanning)}
-                                    className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 shadow-sm ${scanning
-                                        ? "bg-black text-white hover:bg-gray-800"
-                                        : "bg-blue-600 text-white hover:bg-blue-700"
+                                    className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 shadow-sm ${scanning ? "bg-black text-white hover:bg-gray-800" : "bg-blue-600 text-white hover:bg-blue-700"
                                         }`}
                                 >
                                     {scanning ? "Stop Scanner" : "Start Scanner"}
@@ -103,11 +123,9 @@ function AttendanceScanner() {
                             </div>
 
                             {/* Scanner Area */}
-                            {scanning && (
-                                <div className="border-2 border-blue-600 rounded-xl overflow-hidden bg-black/5">
-                                    <QRCodeScanner onScan={handleUserScan} />
-                                </div>
-                            )}
+                            <div style={{ display: scanning ? "block" : "none" }} className="border-2 border-blue-600 rounded-xl overflow-hidden bg-black/5">
+                                <QRCodeScanner onScan={handleUserScan} />
+                            </div>
 
                             {/* Processing Indicator */}
                             {isProcessing && (
@@ -122,22 +140,30 @@ function AttendanceScanner() {
 
                         {/* Status Message */}
                         {message && !showModal && (
-                            <div className={`rounded-lg p-6 border ${message.includes("✅")
-                                ? "bg-green-50 border-green-200"
-                                : "bg-red-50 border-red-200"
-                                }`}>
+                            <div
+                                className={`rounded-lg p-6 border ${message.includes("✅") ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                                    }`}
+                            >
                                 <div className="flex items-center">
-                                    {message.includes("✅") ? (
-                                        <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    ) : (
-                                        <svg className="w-6 h-6 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    )}
-                                    <p className={`font-medium ${message.includes("✅") ? "text-green-800" : "text-red-800"
-                                        }`}>
+                                    <svg
+                                        className={`w-6 h-6 mr-3 ${message.includes("✅") ? "text-green-600" : "text-red-600"
+                                            }`}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d={
+                                                message.includes("✅")
+                                                    ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                    : "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                            }
+                                        />
+                                    </svg>
+                                    <p className={`font-medium ${message.includes("✅") ? "text-green-800" : "text-red-800"}`}>
                                         {message}
                                     </p>
                                 </div>
@@ -176,9 +202,7 @@ function AttendanceScanner() {
                             </svg>
                         </div>
 
-                        <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                            Time In Recorded
-                        </h3>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-2">Time In Recorded</h3>
 
                         <p className="text-gray-600 mb-6">
                             Welcome, <span className="font-semibold text-blue-600">{scannedUser?.name}</span>
