@@ -21,7 +21,7 @@ function App() {
         </Route>
 
         {/* Scanner route (not part of admin) */}
-        <Route path="/scanner" element={<AttendanceScanner />} />
+        <Route path="/scanner/:officeId" element={<AttendanceScanner />} />
 
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/admin" replace />} />

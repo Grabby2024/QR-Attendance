@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import QRCodeScanner from "../components/QRCodeScanner";
 import Modal from "./components/Modal";
 import api from "../api/api";
 
 function AttendanceScanner() {
-    const [searchParams] = useSearchParams();
-    const officeId = searchParams.get("office_id");
-    const [userId, setUserId] = useState("");
+    const { officeId } = useParams();
     const [message, setMessage] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [scannedUser, setScannedUser] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false); // prevent duplicate scans
 
     useEffect(() => {
         if (!officeId) {
@@ -19,7 +18,8 @@ function AttendanceScanner() {
     }, [officeId]);
 
     const handleUserScan = async (data) => {
-        if (!data) return;
+        if (!data || isProcessing) return; // ignore empty/duplicate scans
+        setIsProcessing(true);
 
         try {
             // Verify user exists
@@ -38,6 +38,9 @@ function AttendanceScanner() {
         } catch (err) {
             console.error("❌ Error verifying or recording attendance:", err);
             setMessage("❌ Invalid User ID or failed to record attendance.");
+        } finally {
+            // allow scanning again after a short delay
+            setTimeout(() => setIsProcessing(false), 2000);
         }
     };
 
@@ -51,22 +54,6 @@ function AttendanceScanner() {
                 <div>
                     <h2 className="text-lg mb-2">Scan User QR Code</h2>
                     <QRCodeScanner onScan={handleUserScan} />
-
-                    {/* Optional manual input */}
-                    <div className="mt-4 flex gap-2">
-                        <input
-                            className="border p-2"
-                            placeholder="Enter User UUID"
-                            value={userId}
-                            onChange={(e) => setUserId(e.target.value)}
-                        />
-                        <button
-                            className="bg-green-500 text-white px-4 py-2 rounded"
-                            onClick={() => handleUserScan(userId)}
-                        >
-                            Submit
-                        </button>
-                    </div>
                 </div>
             )}
 
