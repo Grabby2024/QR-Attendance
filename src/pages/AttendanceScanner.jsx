@@ -22,16 +22,32 @@ function AttendanceScanner() {
     const handleUserScan = async (data) => {
         if (!data || isProcessing) return;
         setIsProcessing(true);
+
         try {
+            // Parse QR code JSON
+            let scanned;
+            try {
+                scanned = JSON.parse(data);
+            } catch {
+                setMessage("❌ Invalid QR code format.");
+                return;
+            }
+
+            const { userId, officeId: qrOfficeId } = scanned;
+
             const userList = await getUsers();
-            const user = userList.find(u => u.id === data);
+            const user = userList.find(u => u.id === userId);
 
             if (!user) {
                 setMessage("❌ User not found.");
                 return;
             }
 
-            await recordAttendance({ user_id: user.id, office_id: officeId });
+            // Use QR code officeId if provided, otherwise fallback to route param
+            const officeToRecord = qrOfficeId || officeId;
+
+            await recordAttendance({ user_id: user.id, office_id: officeToRecord });
+
             setScannedUser(user);
             setMessage(`✅ Attendance recorded for ${user.name}`);
             setShowModal(true);
