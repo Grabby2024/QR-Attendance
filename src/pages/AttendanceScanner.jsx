@@ -49,26 +49,29 @@ function AttendanceScanner() {
                     return;
                 }
 
-                // Extract User ID and Office ID
+                // ✅ Extract camelCase keys from QR
                 const { userId, officeId: qrOfficeId } = scanned;
-                const user = userList.find((u) => u.id === userId);
 
-                // Validate user
+                // ✅ Find user in list (check both id and user_id)
+                const user = userList.find(
+                    (u) => u.id === userId || u.user_id === userId
+                );
+
                 if (!user) {
                     setMessage("❌ User Not Found.");
                     return;
                 }
 
-                // Record attendance via backend
+                // Record attendance
                 const officeToRecord = qrOfficeId || officeId;
                 const response = await recordAttendance({
-                    user_id: user.id,
+                    user_id: user.id || user.user_id,
                     office_id: officeToRecord,
                 });
 
                 setScannedUser(user);
 
-                // ✅ Display backend message + timestamp
+                // Display backend message + time info
                 const { message, attendance } = response;
                 let timeInfo = "";
                 if (attendance?.time_in) {
@@ -80,7 +83,6 @@ function AttendanceScanner() {
 
                 setMessage(`${message} for ${user.name}${timeInfo}`);
 
-                // Optional: redirect after delay
                 setTimeout(() => {
                     window.location.href = "https://www.google.com";
                 }, 1500);
