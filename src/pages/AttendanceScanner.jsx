@@ -28,6 +28,10 @@ function AttendanceScanner() {
         fetchUsers();
     }, [officeId]);
 
+    //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //SCAN VERIFICATION AND ATTENDANCE RECORDING LOGIC
+    //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    // Scan and Verify User
     const handleUserScan = useCallback(
         async (data) => {
             if (!data || processing) return;
@@ -36,29 +40,47 @@ function AttendanceScanner() {
             setProcessing(true);
 
             try {
+                // Parse scanned QR data
                 let scanned;
                 try {
                     scanned = JSON.parse(data);
                 } catch {
-                    setMessage("❌ Invalid QR code format.");
+                    setMessage("❌ Scan your ID QR Code.");
                     return;
                 }
 
+                // Extract User ID and Office ID
                 const { userId, officeId: qrOfficeId } = scanned;
                 const user = userList.find((u) => u.id === userId);
 
+                // Validate user
                 if (!user) {
-                    setMessage("❌ User not found.");
+                    setMessage("❌ User Not Found.");
                     return;
                 }
 
+                // Record attendance via backend
                 const officeToRecord = qrOfficeId || officeId;
-
-                await recordAttendance({ user_id: user.id, office_id: officeToRecord });
+                const response = await recordAttendance({
+                    user_id: user.id,
+                    office_id: officeToRecord,
+                });
 
                 setScannedUser(user);
-                setMessage(`✅ Attendance recorded for ${user.name}`);
 
+                // ✅ Display backend message + timestamp
+                const { message, attendance } = response;
+                let timeInfo = "";
+                if (attendance?.time_in) {
+                    timeInfo = ` (In: ${new Date(attendance.time_in).toLocaleTimeString()})`;
+                }
+                if (attendance?.time_out) {
+                    timeInfo += ` (Out: ${new Date(attendance.time_out).toLocaleTimeString()})`;
+                }
+
+                setMessage(`${message} for ${user.name}${timeInfo}`);
+
+                // Optional: redirect after delay
                 setTimeout(() => {
                     window.location.href = "https://www.google.com";
                 }, 1500);
@@ -73,6 +95,7 @@ function AttendanceScanner() {
         },
         [userList, officeId, processing]
     );
+
 
     return (
         <div className="min-h-screen bg-gray-50">
