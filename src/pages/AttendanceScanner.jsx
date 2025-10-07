@@ -36,9 +36,9 @@ function AttendanceScanner() {
         setProcessing(true);
 
         try {
-            // ✅ Support both camelCase & snake_case from QR
-            const userId = scanned.userId || scanned.user_id;
-            const qrOfficeId = scanned.officeId || scanned.office_id;
+            // ✅ Always normalize QR data into consistent keys
+            const userId = String(scanned.userId || scanned.user_id || "").trim();
+            const qrOfficeId = String(scanned.officeId || scanned.office_id || "").trim();
 
             if (!userId) {
                 setMessage("❌ Invalid QR code: missing user ID.");
@@ -47,13 +47,14 @@ function AttendanceScanner() {
                 return;
             }
 
-            // ✅ Match user regardless of string key mismatch
-            const user = userList.find(
-                (u) =>
-                    String(u.id) === String(userId) ||
-                    String(u.user_id) === String(userId) ||
-                    String(u.userId) === String(userId)
-            );
+            // ✅ Find user in list (normalize all possible fields)
+            const user = userList.find((u) => {
+                return (
+                    String(u.id) === userId ||
+                    String(u.user_id) === userId ||
+                    String(u.userId) === userId
+                );
+            });
 
             if (!user) {
                 setMessage("❌ User not found.");
@@ -62,7 +63,7 @@ function AttendanceScanner() {
                 return;
             }
 
-            // ✅ Office ID fallback (QR > URL param)
+            // ✅ Prefer QR office ID, fallback to URL param
             const officeToRecord = qrOfficeId || officeId;
             if (!officeToRecord) {
                 setMessage("❌ Missing office ID.");
@@ -71,9 +72,9 @@ function AttendanceScanner() {
                 return;
             }
 
-            // ✅ Call backend
+            // ✅ Call backend with normalized keys
             const response = await recordAttendance({
-                user_id: user.id || user.user_id,
+                user_id: user.id || user.user_id || user.userId,
                 office_id: officeToRecord,
             });
 
