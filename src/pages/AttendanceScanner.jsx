@@ -47,11 +47,12 @@ function AttendanceScanner() {
                 return;
             }
 
-            // ✅ Match user regardless of string mismatch
+            // ✅ Match user regardless of string key mismatch
             const user = userList.find(
                 (u) =>
                     String(u.id) === String(userId) ||
-                    String(u.user_id) === String(userId)
+                    String(u.user_id) === String(userId) ||
+                    String(u.userId) === String(userId)
             );
 
             if (!user) {
