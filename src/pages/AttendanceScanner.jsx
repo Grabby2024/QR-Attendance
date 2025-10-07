@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import QRCodeScanner from "../components/QRCodeScanner";
-import { fetchUsers, recordAttendance } from "../api";
+import { fetchUsers, recordAttendance } from "../api/Users";
 
 const AttendanceScanner = () => {
     const { officeId } = useParams(); // from URL
